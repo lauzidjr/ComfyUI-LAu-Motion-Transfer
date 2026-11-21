@@ -1,0 +1,15 @@
+[project]
+name = "comfyui-lau-motion-transfer"
+description = "LAu Motion Transfer: swap the person in any dance or motion clip with your character using MiniMax H3 + Pika Flex. Keeps the moves, the camera and the original audio."
+version = "1.0.0"
+license = { file = "LICENSE" }
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/lauzidjr/ComfyUI-LAu-Motion-Transfer"
+
+[tool.comfy]
+PublisherId = "YOUR_PUBLISHER_ID"
+DisplayName = "LAu Motion Transfer"
+Icon = ""
+includes = []
