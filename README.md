@@ -154,6 +154,8 @@ The fl2va checkpoint and the Fashion LoRAs are only needed for the optional Fash
 - **Precise face mask (SAM3):** sharper eyes and mouth on medium-size faces, no halo in the hair. It adds 1-2 minutes per run; turn it off in *Extras* to go back to the elliptical area.
 - If the first second looks wrong, try another seed before changing the prompt.
 - Running out of memory: lower the resolution, or keep the face refine on *Adaptive* and turn off the extras.
+- **10-second clips:** lower *megapixels* to 0.6-0.7. A 10 s run at 0.65 MP takes about 40 minutes on a 16 GB card.
+- **ComfyUI closes without an error during the face stitch?** Windows ran out of virtual memory: ComfyUI can hold more than 110 GB of RAM in a long run. Raise the page file to 32-64 GB (*System → Advanced system settings → Performance → Virtual memory*).
 
 ### Licenses and credits
 
@@ -206,6 +208,8 @@ Todas as escolhas ficam nos cartões de chave em **1 · Settings** (Mode, Face r
 - **Máscara precisa do rosto (SAM3):** olhos e boca mais nítidos em rostos de tamanho médio, sem halo no cabelo. Acrescenta 1 a 2 minutos por geração; desligue em *Extras* para voltar à área em elipse.
 - Se o primeiro segundo sair estranho, troque a seed antes de mexer no prompt.
 - Se faltar memória, diminua a resolução ou deixe o refinamento em *Adaptive* e desligue os extras.
+- **Vídeos de 10 segundos:** baixe *megapixels* para 0,6-0,7. Uma geração de 10 s a 0,65 MP leva cerca de 40 minutos numa placa de 16 GB.
+- **O ComfyUI fecha sem erro durante a colagem do rosto?** Acabou a memória virtual do Windows: numa geração longa o ComfyUI pode ocupar mais de 110 GB de RAM. Aumente o arquivo de paginação para 32-64 GB (*Sistema → Configurações avançadas do sistema → Desempenho → Memória virtual*).
 
 ### Licenças e créditos
 
