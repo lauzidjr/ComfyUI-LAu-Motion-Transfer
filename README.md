@@ -16,6 +16,8 @@
   <img src="https://img.shields.io/badge/license-MIT-ff4fa3" alt="MIT license">
 </p>
 
+<p align="center"><sub>A <b>LAu Studios</b> project</sub></p>
+
 <p align="center"><b><a href="#english">English</a> · <a href="#português">Português</a></b></p>
 
 ---
@@ -151,7 +153,7 @@ The fl2va checkpoint and the Fashion LoRAs are only needed for the optional Fash
 
 ### Licenses and credits
 
-The LAu Motion Transfer nodes are released under the **MIT** license. The models and the other custom-node packs keep their own licenses, so check them before any commercial use. No model weights are included in this repository.
+LAu Motion Transfer is a **LAu Studios** project, © 2026 LAu Studios. The nodes are released under the **MIT** license. The models and the other custom-node packs keep their own licenses, so check them before any commercial use. No model weights are included in this repository.
 
 The workflow is based on the original **KoO Motion Control** workflow by **KoO**. It uses nodes by Carasibana, T8mars, PixelAI Labs (H3 Face Size Fade), kijai, Kosinkadink, ausboss, 9nate-drake, yuvraj108c and facok. Thanks to all of them.
 
@@ -202,6 +204,6 @@ Todas as escolhas ficam nos cartões de chave em **1 · Settings** (Mode, Face r
 
 ### Licenças e créditos
 
-Os nós LAu Motion Transfer usam a licença **MIT**. Os modelos e os outros pacotes de nós mantêm as licenças deles, então confira antes de qualquer uso comercial. Nenhum peso de modelo vem neste repositório.
+O LAu Motion Transfer é um projeto da **LAu Studios**, © 2026 LAu Studios. Os nós usam a licença **MIT**. Os modelos e os outros pacotes de nós mantêm as licenças deles, então confira antes de qualquer uso comercial. Nenhum peso de modelo vem neste repositório.
 
 O workflow é baseado no workflow original **KoO Motion Control**, de **KoO**. Ele usa nós de Carasibana, T8mars, PixelAI Labs (H3 Face Size Fade), kijai, Kosinkadink, ausboss, 9nate-drake, yuvraj108c e facok. Obrigado a todos.
