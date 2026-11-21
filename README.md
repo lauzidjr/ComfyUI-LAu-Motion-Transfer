@@ -69,7 +69,7 @@ Both examples use the same two reference pictures and the default settings (face
 This repository contains:
 
 - **`example_workflows/LAu_Motion_Transfer.json`**: the workflow. After installing, it shows up in ComfyUI under *Templates → Custom nodes → LAu Motion Transfer*.
-- **8 helper nodes** (category *LAu Motion Transfer*) that the workflow uses, plus the **LAu Studio** banner.
+- **9 helper nodes** (category *LAu Motion Transfer*) that the workflow uses, plus the **LAu Studio** banner.
 
 ### Quick start
 
@@ -85,7 +85,7 @@ This repository contains:
 
 1. Segments the person in the source video (SeC) and builds a depth guide (Video Depth Anything).
 2. Generates the clip with your character using H3 Ref2VA + Pika Flex. *Picture 1* is the face; *Picture 2* is an optional full-body or outfit sheet.
-3. Optional face refine: **Adaptive** (H3-FaceRefine, recommended) or **T8**. The **Face Size Fade** node (PixelAI Labs) applies the refine fully on small, distant faces and leaves close-ups as H3 made them.
+3. Optional face refine: **Adaptive** (H3-FaceRefine, recommended) or **T8**. With the **Precise face mask** switch (on by default), **SAM3** finds the face in every crop and only that area is re-rendered and pasted back. The **Face Size Fade** node (PixelAI Labs) applies the refine fully on small, distant faces and leaves close-ups as H3 made them.
 4. Saves the final video with the original audio and, optionally, a side-by-side comparison (original video | result) and debug files.
 
 All choices are on the switch cards in **1 · Settings** (Mode, Face refine, Extras). Purple nodes are the ones you change on each run.
@@ -102,6 +102,7 @@ All choices are on the switch cards in **1 · Settings** (Mode, Face refine, Ext
 | LAu Motion Transfer · T8 Face Stitch | Runs the T8 face stitch only when T8 is the selected face refine |
 | LAu Motion Transfer · Trim Video + Audio | Cuts the result to the exact frames loaded from the source and the audio to the same length |
 | LAu Motion Transfer · Labeled Comparison | Puts two clips side by side with a caption above each; the smaller clip is resized to the larger one |
+| LAu Motion Transfer · Face Mask on Latent | Limits the face refine to the face SAM3 finds: only the face is re-rendered and pasted back, hair and background stay as H3 made them |
 | LAu Studio | Canvas-only banner at the top of the workflow. It is never sent to the server |
 
 ### Install
@@ -116,6 +117,7 @@ All choices are on the switch cards in **1 · Settings** (Mode, Face refine, Ext
    - [Comfyui-SecNodes](https://github.com/9nate-drake/Comfyui-SecNodes)
    - [ComfyUI-Video-Depth-Anything](https://github.com/yuvraj108c/ComfyUI-Video-Depth-Anything)
    - [ComfyUI-H3-FaceFix-PixelAILabs](https://github.com/Pixelailabs/ComfyUI-H3-FaceFix-PixelAILabs) (H3 Face Size Fade)
+   - [MaskVidExperiments](https://github.com/drozbay/MaskVidExperiments) (face mask cleanup and H3 latent masks)
    - [comfyui-SelfLift](https://github.com/facok/comfyui-SelfLift) (only for the optional Fashion branch)
    - Optional: [ComfyUI-SolAttn_triton](https://github.com/kijai/ComfyUI-SolAttn_triton) for the Sparse Attention node
 2. Use a recent ComfyUI with MiniMax H3 support (tested on 0.46).
@@ -138,6 +140,7 @@ git clone https://github.com/lauzidjr/ComfyUI-LAu-Motion-Transfer
 | SeC-4B-fp16.safetensors | see SecNodes README | [VeryAladeen/Sec-4B](https://huggingface.co/VeryAladeen/Sec-4B) |
 | video_depth_anything_vits.pth | see Video-Depth-Anything README | [depth-anything/Video-Depth-Anything-Small](https://huggingface.co/depth-anything/Video-Depth-Anything-Small) |
 | face_yolov8m.pt, person_yolov8m-seg.pt | ultralytics/bbox, ultralytics/segm | [Bingsu/adetailer](https://huggingface.co/Bingsu/adetailer) |
+| sam3.1_multiplex_fp16.safetensors *(Precise face mask)* | checkpoints | [Comfy-Org/sam3.1](https://huggingface.co/Comfy-Org/sam3.1) |
 | face_detection_yunet_2023mar.onnx *(T8 refine)* | facedetection | [opencv_zoo](https://github.com/opencv/opencv_zoo) |
 
 The fl2va checkpoint and the Fashion LoRAs are only needed for the optional Fashion mode.
@@ -148,6 +151,7 @@ The fl2va checkpoint and the Fashion LoRAs are only needed for the optional Fash
 - **New video or new start?** Run **▶ REFRESH THE FRAME** (Run selected) before marking the points, or you will be marking an old frame.
 - **Clothes:** describe the outfit of Picture 2 in the prompt and say what must not appear (for example *no skirt, no dress*). Otherwise H3 may copy the clothing shape of the original dancer.
 - **Close-ups look over-processed after the face refine?** That is what the Face Size Fade prevents. Faces taller than ~180 px (at 1080p) keep the H3 result; lower `no_fix_above_px` to refine even less.
+- **Precise face mask (SAM3):** sharper eyes and mouth on medium-size faces, no halo in the hair. It adds 1-2 minutes per run; turn it off in *Extras* to go back to the elliptical area.
 - If the first second looks wrong, try another seed before changing the prompt.
 - Running out of memory: lower the resolution, or keep the face refine on *Adaptive* and turn off the extras.
 
@@ -155,7 +159,7 @@ The fl2va checkpoint and the Fashion LoRAs are only needed for the optional Fash
 
 LAu Motion Transfer is a **LAu Studios** project, © 2026 LAu Studios. The nodes are released under the **MIT** license. The models and the other custom-node packs keep their own licenses, so check them before any commercial use. No model weights are included in this repository.
 
-The workflow is based on the original **KoO Motion Control** workflow by **KoO**. It uses nodes by Carasibana, T8mars, PixelAI Labs (H3 Face Size Fade), kijai, Kosinkadink, ausboss, 9nate-drake, yuvraj108c and facok. Thanks to all of them.
+The workflow is based on the original **KoO Motion Control** workflow by **KoO**. It uses nodes by Carasibana, T8mars, PixelAI Labs (H3 Face Size Fade), drozbay (MaskVidExperiments), kijai, Kosinkadink, ausboss, 9nate-drake, yuvraj108c and facok. Thanks to all of them.
 
 ---
 
@@ -166,7 +170,7 @@ O **LAu Motion Transfer** troca a pessoa de um vídeo de dança ou movimento pel
 Este repositório traz:
 
 - **`example_workflows/LAu_Motion_Transfer.json`**: o workflow. Depois de instalar, ele aparece no ComfyUI em *Templates → Custom nodes → LAu Motion Transfer*.
-- **8 nós auxiliares** (categoria *LAu Motion Transfer*), descritos na tabela da versão em inglês, e o banner **LAu Studio**.
+- **9 nós auxiliares** (categoria *LAu Motion Transfer*), descritos na tabela da versão em inglês, e o banner **LAu Studio**.
 
 ### Começo rápido
 
@@ -182,7 +186,7 @@ Este repositório traz:
 
 1. Separa a pessoa do vídeo de origem (SeC) e cria um guia de profundidade (Video Depth Anything).
 2. Gera o clipe com o seu personagem usando H3 Ref2VA + Pika Flex. A *Picture 1* é o rosto; a *Picture 2* é uma foto de corpo inteiro ou roupa (opcional).
-3. Refinamento de rosto opcional: **Adaptive** (H3-FaceRefine, recomendado) ou **T8**. O nó **Face Size Fade** (PixelAI Labs) aplica o refinamento inteiro em rostos pequenos e distantes e deixa os closes como o H3 gerou.
+3. Refinamento de rosto opcional: **Adaptive** (H3-FaceRefine, recomendado) ou **T8**. Com a chave **Precise face mask** (ligada por padrão), o **SAM3** acha o rosto em cada recorte e só essa área é refeita e colada de volta. O nó **Face Size Fade** (PixelAI Labs) aplica o refinamento inteiro em rostos pequenos e distantes e deixa os closes como o H3 gerou.
 4. Salva o vídeo final com o áudio original e, se você quiser, um comparativo lado a lado (vídeo original | resultado) e arquivos de depuração.
 
 Todas as escolhas ficam nos cartões de chave em **1 · Settings** (Mode, Face refine, Extras). Os nós roxos são os que você muda a cada geração.
@@ -199,6 +203,7 @@ Todas as escolhas ficam nos cartões de chave em **1 · Settings** (Mode, Face r
 - **Vídeo novo ou início novo?** Rode o **▶ REFRESH THE FRAME** (Run selected) antes de marcar os pontos; senão você marca em cima de um frame antigo.
 - **Roupa:** descreva no prompt a roupa da Picture 2 e diga o que não pode aparecer (por exemplo *no skirt, no dress*). Sem isso, o H3 pode copiar o formato da roupa de quem dança no vídeo original.
 - **Rosto de perto ficou processado demais depois do refinamento?** É isso que o Face Size Fade evita. Rostos com mais de ~180 px (em 1080p) mantêm o resultado do H3; diminua `no_fix_above_px` para refinar ainda menos.
+- **Máscara precisa do rosto (SAM3):** olhos e boca mais nítidos em rostos de tamanho médio, sem halo no cabelo. Acrescenta 1 a 2 minutos por geração; desligue em *Extras* para voltar à área em elipse.
 - Se o primeiro segundo sair estranho, troque a seed antes de mexer no prompt.
 - Se faltar memória, diminua a resolução ou deixe o refinamento em *Adaptive* e desligue os extras.
 
@@ -206,4 +211,4 @@ Todas as escolhas ficam nos cartões de chave em **1 · Settings** (Mode, Face r
 
 O LAu Motion Transfer é um projeto da **LAu Studios**, © 2026 LAu Studios. Os nós usam a licença **MIT**. Os modelos e os outros pacotes de nós mantêm as licenças deles, então confira antes de qualquer uso comercial. Nenhum peso de modelo vem neste repositório.
 
-O workflow é baseado no workflow original **KoO Motion Control**, de **KoO**. Ele usa nós de Carasibana, T8mars, PixelAI Labs (H3 Face Size Fade), kijai, Kosinkadink, ausboss, 9nate-drake, yuvraj108c e facok. Obrigado a todos.
+O workflow é baseado no workflow original **KoO Motion Control**, de **KoO**. Ele usa nós de Carasibana, T8mars, PixelAI Labs (H3 Face Size Fade), drozbay (MaskVidExperiments), kijai, Kosinkadink, ausboss, 9nate-drake, yuvraj108c e facok. Obrigado a todos.

@@ -43,14 +43,18 @@ class LAuMotionModes(io.ComfyNode):
                 io.Boolean.Input("dlss_enabled", default=False),
                 io.Boolean.Input("save_comparison", default=False),
                 io.Boolean.Input("save_debug", default=False),
+                io.Boolean.Input("face_mask_sam3", default=True,
+                                 tooltip="Adaptive refine: re-render and paste only the face found by SAM3 "
+                                         "(off = the elliptical area of the H3-FaceRefine pack)."),
             ],
             outputs=[io.Boolean.Output(name) for name in (
                 "fashion", "reference_task", "t8", "adaptive", "refine", "dlss",
-                "comparison", "debug_role", "debug_t8", "debug_adaptive")],
+                "comparison", "debug_role", "debug_t8", "debug_adaptive", "face_mask")],
         )
 
     @classmethod
-    def execute(cls, generation_mode, fashion_task, face_refine, dlss_enabled, save_comparison, save_debug):
+    def execute(cls, generation_mode, fashion_task, face_refine, dlss_enabled, save_comparison, save_debug,
+                face_mask_sam3=True):
         is_fashion = generation_mode == "Fashion Video"
         use_t8 = face_refine == "T8 Face Refine"
         use_adaptive = face_refine == "Adaptive Face Refine"
@@ -66,6 +70,7 @@ class LAuMotionModes(io.ComfyNode):
             "debug_role": bool(save_debug) and not is_fashion,
             "debug_t8": bool(save_debug) and use_t8,
             "debug_adaptive": bool(save_debug) and use_adaptive,
+            "face_mask": bool(face_mask_sam3) and use_adaptive,
         }
         return io.NodeOutput(*flags.values())
 
@@ -372,5 +377,89 @@ class LAuLabeledComparison(io.ComfyNode):
         return io.NodeOutput(torch.cat([rows[0], gap, rows[1]], dim=2))
 
 
+# --------------------------------------------------------------------------- face mask on the latent
+class LAuFaceMaskLatent(io.ComfyNode):
+    """Re-render only the face: limits the H3 refine latent to a SAM3 face mask (or passes everything through)."""
+
+    @classmethod
+    def define_schema(cls):
+        return io.Schema(
+            node_id="LAuFaceMaskLatent",
+            display_name="LAu Motion Transfer · Face Mask on Latent",
+            category=CATEGORY,
+            description="When enabled: multiplies the video noise mask of a MiniMax H3 joint AV latent by a "
+                        "latent-resolution face mask (SAM3 masks reduced with MVEx Mask To Latent Space), keeping a "
+                        "per-frame mask already on the latent (H3 Per-Frame Denoise); applies Differential Diffusion "
+                        "to the model; and outputs the pixel masks for the face stitch. When disabled the masks are "
+                        "not computed at all and model, latent and stitch behave as without this node.",
+            inputs=[
+                io.Model.Input("model"),
+                io.Latent.Input("av_latent"),
+                io.Boolean.Input("enabled", default=True),
+                io.Mask.Input("latent_mask", optional=True, lazy=True,
+                              tooltip="One mask per latent frame, at latent resolution."),
+                io.Mask.Input("pixel_masks", optional=True, lazy=True,
+                              tooltip="Face masks in crop (canvas) space, passed on to the face stitch."),
+                io.Float.Input("outside_strength", default=0.0, min=0.0, max=1.0, step=0.05,
+                               tooltip="Denoise kept outside the mask. 0 = only the face is re-rendered."),
+            ],
+            outputs=[io.Model.Output(display_name="model"), io.Latent.Output(display_name="av_latent"),
+                     io.Mask.Output(display_name="stitch_masks"), io.String.Output(display_name="report")],
+        )
+
+    @classmethod
+    def check_lazy_status(cls, enabled, latent_mask=None, pixel_masks=None, **kwargs):
+        if not enabled:
+            return []
+        return [n for n, v in (("latent_mask", latent_mask), ("pixel_masks", pixel_masks)) if v is None]
+
+    @classmethod
+    def execute(cls, model, av_latent, enabled, outside_strength, latent_mask=None, pixel_masks=None):
+        if not enabled or latent_mask is None:
+            return io.NodeOutput(model, av_latent, None, "face mask off: elliptical face area")
+        import comfy.nested_tensor as nt
+
+        def is_nested(x):
+            return isinstance(x, nt.NestedTensor) or getattr(x, "is_nested", False)
+
+        samples = av_latent["samples"]
+        nested = is_nested(samples)
+        members = list(samples.unbind()) if nested else [samples]
+        video = members[0]                                    # [B, C, T, H, W]
+        t, h, w = video.shape[-3:]
+
+        m = latent_mask.float()
+        if m.ndim == 2:
+            m = m[None]
+        if tuple(m.shape) != (t, h, w):
+            m = F.interpolate(m[None, None], size=(t, h, w), mode="nearest")[0, 0]
+        m = outside_strength + (1.0 - outside_strength) * m.clamp(0, 1)
+        m5 = m.view(1, 1, t, h, w).to(video.device)
+
+        prev = av_latent.get("noise_mask")
+        prev_members = (list(prev.unbind()) if is_nested(prev) else [prev]) if prev is not None else [None]
+        pv = prev_members[0]
+        if pv is None or pv.ndim != 5 or tuple(pv.shape[-3:]) != (t, h, w):
+            pv = torch.ones(video.shape[:2] + (t, h, w), device=video.device)
+        vmask = (pv.to(video.device, torch.float32) * m5).expand(video.shape[0], video.shape[1], t, h, w)
+        vmask = vmask.contiguous().to(video.dtype)
+
+        rest = []
+        for i, mem in enumerate(members[1:], start=1):
+            old = prev_members[i] if i < len(prev_members) else None
+            rest.append(old if old is not None else torch.zeros_like(mem))   # audio: unchanged / held
+        out = dict(av_latent)
+        out["noise_mask"] = nt.NestedTensor(tuple([vmask] + rest)) if nested else vmask
+
+        soft_model = _run_node("DifferentialDiffusion", model=model, strength=1.0)[0]
+
+        cover = float((m > 0.5).float().mean())
+        empty = int(((m.reshape(t, -1) > 0.5).sum(dim=1) == 0).sum())
+        report = (f"face mask on latent {t}x{h}x{w}: {cover * 100:.1f}% of the video latent is re-rendered; "
+                  f"{empty} latent frame(s) without a face are kept as they were")
+        print(f"[LAu Motion Transfer] {report}")
+        return io.NodeOutput(soft_model, out, pixel_masks, report)
+
+
 NODES = [LAuMotionModes, LAuDuration, LAuOptionalLoRA, LAuSaveVideo, LAuSparseAttention, LAuT8FaceStitch, LAuTrimAV,
-         LAuLabeledComparison]
+         LAuLabeledComparison, LAuFaceMaskLatent]
