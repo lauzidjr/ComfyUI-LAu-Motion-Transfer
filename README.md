@@ -84,7 +84,7 @@ This repository contains:
 ### What the workflow does
 
 1. Segments the person in the source video (SeC) and builds a depth guide (Video Depth Anything).
-2. Generates the clip with your character using H3 Ref2VA + Pika Flex. *Picture 1* is the face; *Picture 2* is an optional full-body or outfit sheet.
+2. Generates the clip with your character using H3 Ref2VA + Pika Flex + the **Character swap LoRA v1.5** (akatz-ai, switch on by default). *Picture 1* is the face; *Picture 2* is an optional full-body or outfit sheet.
 3. Optional face refine: **Adaptive** (H3-FaceRefine, recommended) or **T8**. With the **Precise face mask** switch (on by default), **SAM3** finds the face in every crop and only that area is re-rendered and pasted back. The **Face Size Fade** node (PixelAI Labs) applies the refine fully on small, distant faces and leaves close-ups as H3 made them.
 4. Saves the final video with the original audio and, optionally, a side-by-side comparison (original video | result) and debug files.
 
@@ -136,6 +136,7 @@ git clone https://github.com/lauzidjr/ComfyUI-LAu-Motion-Transfer
 | qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors | text_encoders | Comfy-Org/MiniMax-H3 |
 | minimax_h3_video_vae_int8_convrot.safetensors, minimax_h3_audio_vae_fp32.safetensors | vae | Comfy-Org/MiniMax-H3 |
 | pika_h3_flex_ref2va_v1_bf16.safetensors | loras | Comfy-Org/MiniMax-H3 |
+| h3_character_swap_v1.5.safetensors *(Character swap LoRA)* | loras | [akatz-ai/MiniMax-H3-Character-Swap-LoRA](https://huggingface.co/akatz-ai/MiniMax-H3-Character-Swap-LoRA) |
 | RealESRGAN_x2plus.pth | upscale_models | [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN/releases/tag/v0.2.1) |
 | SeC-4B-fp16.safetensors | see SecNodes README | [VeryAladeen/Sec-4B](https://huggingface.co/VeryAladeen/Sec-4B) |
 | video_depth_anything_vits.pth | see Video-Depth-Anything README | [depth-anything/Video-Depth-Anything-Small](https://huggingface.co/depth-anything/Video-Depth-Anything-Small) |
@@ -152,6 +153,7 @@ The fl2va checkpoint and the Fashion LoRAs are only needed for the optional Fash
 - **Clothes:** describe the outfit of Picture 2 in the prompt and say what must not appear (for example *no skirt, no dress*). Otherwise H3 may copy the clothing shape of the original dancer.
 - **Close-ups look over-processed after the face refine?** That is what the Face Size Fade prevents. Faces taller than ~180 px (at 1080p) keep the H3 result; lower `no_fix_above_px` to refine even less.
 - **Precise face mask (SAM3):** sharper eyes and mouth on medium-size faces, no halo in the hair. It adds 1-2 minutes per run; turn it off in *Extras* to go back to the elliptical area.
+- **Character swap LoRA v1.5:** makes the face closer to Picture 1 (in our tests identity rose 5-12% with the same sharpness and outfit). It can make the smile follow Picture 1; if the expression looks forced, lower its strength in node *03F* or turn it off in *Extras*.
 - If the first second looks wrong, try another seed before changing the prompt.
 - Running out of memory: lower the resolution, or keep the face refine on *Adaptive* and turn off the extras.
 - **10-second clips:** lower *megapixels* to 0.6-0.7. A 10 s run at 0.65 MP takes about 40 minutes on a 16 GB card.
@@ -161,7 +163,7 @@ The fl2va checkpoint and the Fashion LoRAs are only needed for the optional Fash
 
 LAu Motion Transfer is a **LAu Studios** project, © 2026 LAu Studios. The nodes are released under the **MIT** license. The models and the other custom-node packs keep their own licenses, so check them before any commercial use. No model weights are included in this repository.
 
-The workflow is based on the original **KoO Motion Control** workflow by **KoO**. It uses nodes by Carasibana, T8mars, PixelAI Labs (H3 Face Size Fade), drozbay (MaskVidExperiments), kijai, Kosinkadink, ausboss, 9nate-drake, yuvraj108c and facok. Thanks to all of them.
+The workflow is based on the original **KoO Motion Control** workflow by **KoO**. It uses nodes by Carasibana, T8mars, PixelAI Labs (H3 Face Size Fade), drozbay (MaskVidExperiments), Akatz Labs (Character swap LoRA), kijai, Kosinkadink, ausboss, 9nate-drake, yuvraj108c and facok. Thanks to all of them.
 
 ---
 
@@ -187,7 +189,7 @@ Este repositório traz:
 ### O que o workflow faz
 
 1. Separa a pessoa do vídeo de origem (SeC) e cria um guia de profundidade (Video Depth Anything).
-2. Gera o clipe com o seu personagem usando H3 Ref2VA + Pika Flex. A *Picture 1* é o rosto; a *Picture 2* é uma foto de corpo inteiro ou roupa (opcional).
+2. Gera o clipe com o seu personagem usando H3 Ref2VA + Pika Flex + a **Character swap LoRA v1.5** (akatz-ai, chave ligada por padrão). A *Picture 1* é o rosto; a *Picture 2* é uma foto de corpo inteiro ou roupa (opcional).
 3. Refinamento de rosto opcional: **Adaptive** (H3-FaceRefine, recomendado) ou **T8**. Com a chave **Precise face mask** (ligada por padrão), o **SAM3** acha o rosto em cada recorte e só essa área é refeita e colada de volta. O nó **Face Size Fade** (PixelAI Labs) aplica o refinamento inteiro em rostos pequenos e distantes e deixa os closes como o H3 gerou.
 4. Salva o vídeo final com o áudio original e, se você quiser, um comparativo lado a lado (vídeo original | resultado) e arquivos de depuração.
 
@@ -206,6 +208,7 @@ Todas as escolhas ficam nos cartões de chave em **1 · Settings** (Mode, Face r
 - **Roupa:** descreva no prompt a roupa da Picture 2 e diga o que não pode aparecer (por exemplo *no skirt, no dress*). Sem isso, o H3 pode copiar o formato da roupa de quem dança no vídeo original.
 - **Rosto de perto ficou processado demais depois do refinamento?** É isso que o Face Size Fade evita. Rostos com mais de ~180 px (em 1080p) mantêm o resultado do H3; diminua `no_fix_above_px` para refinar ainda menos.
 - **Máscara precisa do rosto (SAM3):** olhos e boca mais nítidos em rostos de tamanho médio, sem halo no cabelo. Acrescenta 1 a 2 minutos por geração; desligue em *Extras* para voltar à área em elipse.
+- **Character swap LoRA v1.5:** deixa o rosto mais parecido com a Picture 1 (nos nossos testes a identidade subiu de 5% a 12%, com a mesma nitidez e a mesma roupa). Ela pode fazer o sorriso seguir a Picture 1; se a expressão ficar forçada, diminua a força no nó *03F* ou desligue em *Extras*.
 - Se o primeiro segundo sair estranho, troque a seed antes de mexer no prompt.
 - Se faltar memória, diminua a resolução ou deixe o refinamento em *Adaptive* e desligue os extras.
 - **Vídeos de 10 segundos:** baixe *megapixels* para 0,6-0,7. Uma geração de 10 s a 0,65 MP leva cerca de 40 minutos numa placa de 16 GB.
@@ -215,4 +218,4 @@ Todas as escolhas ficam nos cartões de chave em **1 · Settings** (Mode, Face r
 
 O LAu Motion Transfer é um projeto da **LAu Studios**, © 2026 LAu Studios. Os nós usam a licença **MIT**. Os modelos e os outros pacotes de nós mantêm as licenças deles, então confira antes de qualquer uso comercial. Nenhum peso de modelo vem neste repositório.
 
-O workflow é baseado no workflow original **KoO Motion Control**, de **KoO**. Ele usa nós de Carasibana, T8mars, PixelAI Labs (H3 Face Size Fade), drozbay (MaskVidExperiments), kijai, Kosinkadink, ausboss, 9nate-drake, yuvraj108c e facok. Obrigado a todos.
+O workflow é baseado no workflow original **KoO Motion Control**, de **KoO**. Ele usa nós de Carasibana, T8mars, PixelAI Labs (H3 Face Size Fade), drozbay (MaskVidExperiments), Akatz Labs (Character swap LoRA), kijai, Kosinkadink, ausboss, 9nate-drake, yuvraj108c e facok. Obrigado a todos.
