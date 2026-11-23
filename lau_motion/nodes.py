@@ -37,7 +37,10 @@ class LAuMotionModes(io.ComfyNode):
             description="Central control of the workflow. The AusBoss switch cards write these values; "
                         "the boolean outputs drive the lazy switches of each branch.",
             inputs=[
-                io.Combo.Input("generation_mode", options=["Role Swap", "Fashion Video"]),
+                io.Combo.Input("generation_mode", options=["Role Swap", "Fashion Video", "Face Only"],
+                               tooltip="Role Swap: the whole person is generated again. Face Only: the original "
+                                       "video is kept and only the face is redrawn from Picture 1 by the Adaptive "
+                                       "face refine (hair, body, clothes and scene stay as they are)."),
                 io.Combo.Input("fashion_task", options=["Image to Video", "Reference to Video"]),
                 io.Combo.Input("face_refine", options=["No Face Refine", "T8 Face Refine", "Adaptive Face Refine"]),
                 io.Boolean.Input("dlss_enabled", default=False),
@@ -49,15 +52,18 @@ class LAuMotionModes(io.ComfyNode):
             ],
             outputs=[io.Boolean.Output(name) for name in (
                 "fashion", "reference_task", "t8", "adaptive", "refine", "dlss",
-                "comparison", "debug_role", "debug_t8", "debug_adaptive", "face_mask")],
+                "comparison", "debug_role", "debug_t8", "debug_adaptive", "face_mask", "keep_original")]
+                    + [io.String.Output("swap_area")],
         )
 
     @classmethod
     def execute(cls, generation_mode, fashion_task, face_refine, dlss_enabled, save_comparison, save_debug,
                 face_mask_sam3=True):
+        face_swap = generation_mode == "Face Only"
         is_fashion = generation_mode == "Fashion Video"
-        use_t8 = face_refine == "T8 Face Refine"
-        use_adaptive = face_refine == "Adaptive Face Refine"
+        # the face swap modes are made by the Adaptive refine on the original video, whatever the refine switch says
+        use_t8 = face_refine == "T8 Face Refine" and not face_swap
+        use_adaptive = face_refine == "Adaptive Face Refine" or face_swap
         any_refine = use_t8 or use_adaptive
         flags = {
             "fashion": is_fashion,
@@ -67,12 +73,59 @@ class LAuMotionModes(io.ComfyNode):
             "refine": any_refine,
             "dlss": bool(dlss_enabled),
             "comparison": bool(save_comparison) and any_refine,
-            "debug_role": bool(save_debug) and not is_fashion,
+            "debug_role": bool(save_debug) and not is_fashion and not face_swap,
             "debug_t8": bool(save_debug) and use_t8,
             "debug_adaptive": bool(save_debug) and use_adaptive,
-            "face_mask": bool(face_mask_sam3) and use_adaptive,
+            "face_mask": (bool(face_mask_sam3) and use_adaptive) or face_swap,
+            "keep_original": face_swap,
         }
-        return io.NodeOutput(*flags.values())
+        area = "face" if face_swap else "person"
+        return io.NodeOutput(*flags.values(), area)
+
+
+class LAuSwapArea(io.ComfyNode):
+    """Adaptive refine settings per swap area: the person mode keeps the refine as it is (it only polishes a face H3
+    already drew); Face Only redraws the face of the ORIGINAL person, so it follows that person, refines every
+    frame and redraws much more."""
+
+    @classmethod
+    def define_schema(cls):
+        return io.Schema(
+            node_id="LAuSwapArea",
+            display_name="LAu Motion Transfer · Swap Area (refine settings)",
+            category=CATEGORY,
+            description="Feeds the Adaptive face refine. Role Swap / Fashion: the values below, as before. "
+                        "Face Only: denoise face_denoise, no Face Size Fade, and the face of the video is followed "
+                        "(not matched to Picture 1).",
+            inputs=[
+                io.String.Input("swap_area", default="person", force_input=True),
+                io.Float.Input("person_denoise", default=0.35, min=0.0, max=1.0, step=0.01),
+                io.Int.Input("person_full_fix_below_px", default=110, min=8, max=2048),
+                io.Int.Input("person_no_fix_above_px", default=180, min=8, max=4096),
+                io.Float.Input("person_large_face_multiplier", default=0.85, min=0.0, max=1.0, step=0.01),
+                io.Int.Input("person_mask_edge_grow", default=16, min=0, max=128),
+                io.Float.Input("face_denoise", default=0.8, min=0.0, max=1.0, step=0.01,
+                               tooltip="How much of the original face is redrawn in Face Only. "
+                                       "Higher = closer to Picture 1, lower = closer to the original expression."),
+            ],
+            outputs=[io.Float.Output("denoise"), io.String.Output("sam3_target"), io.Int.Output("full_fix_below_px"),
+                     io.Int.Output("no_fix_above_px"), io.Boolean.Output("identity_track"),
+                     io.Float.Output("large_face_multiplier"), io.Int.Output("mask_edge_grow"), io.String.Output("report")],
+        )
+
+    @classmethod
+    def execute(cls, swap_area, person_denoise, person_full_fix_below_px, person_no_fix_above_px,
+                person_large_face_multiplier, person_mask_edge_grow, face_denoise):
+        if swap_area == "face":
+            out = (float(face_denoise), "face", 2048, 4096, False, 1.0, int(person_mask_edge_grow))
+            report = (f"swap area: face only on the original video, denoise {face_denoise}, "
+                      f"every frame refined, the face of the video is followed")
+        else:
+            out = (float(person_denoise), "face", int(person_full_fix_below_px), int(person_no_fix_above_px), True,
+                   float(person_large_face_multiplier), int(person_mask_edge_grow))
+            report = f"swap area: whole person (refine denoise {person_denoise})"
+        print(f"[LAu Motion Transfer] {report}")
+        return io.NodeOutput(*out, report)
 
 
 # --------------------------------------------------------------------------- timing
@@ -462,4 +515,4 @@ class LAuFaceMaskLatent(io.ComfyNode):
 
 
 NODES = [LAuMotionModes, LAuDuration, LAuOptionalLoRA, LAuSaveVideo, LAuSparseAttention, LAuT8FaceStitch, LAuTrimAV,
-         LAuLabeledComparison, LAuFaceMaskLatent]
+         LAuLabeledComparison, LAuFaceMaskLatent, LAuSwapArea]

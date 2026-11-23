@@ -69,7 +69,7 @@ Both examples use the same two reference pictures and the default settings (face
 This repository contains:
 
 - **`example_workflows/LAu_Motion_Transfer.json`**: the workflow. After installing, it shows up in ComfyUI under *Templates → Custom nodes → LAu Motion Transfer*.
-- **9 helper nodes** (category *LAu Motion Transfer*) that the workflow uses, plus the **LAu Studio** banner.
+- **10 helper nodes** (category *LAu Motion Transfer*) that the workflow uses, plus the **LAu Studio** banner.
 
 ### Quick start
 
@@ -90,6 +90,16 @@ This repository contains:
 
 All choices are on the switch cards in **1 · Settings** (Mode, Face refine, Extras). Purple nodes are the ones you change on each run.
 
+**Mode** card:
+
+| Mode | What changes | What stays from the original video |
+|---|---|---|
+| **Role Swap** | the whole person: face, hair, body and clothes | motion, camera, scene, sound |
+| **Fashion** | optional fashion clip from Picture 1 / Picture 2 | — |
+| **Face only** | only the face, redrawn from Picture 1 | hair, body, clothes, motion, camera, scene, sound |
+
+In **Face only** the H3 generation and the SeC segmentation do not run: the Adaptive face refine works straight on the original video (follows the face of the video, refines every frame, denoise 0.8 set on the *SWAP AREA* node). No points are needed.
+
 ### Nodes
 
 | Node | What it does |
@@ -103,6 +113,7 @@ All choices are on the switch cards in **1 · Settings** (Mode, Face refine, Ext
 | LAu Motion Transfer · Trim Video + Audio | Cuts the result to the exact frames loaded from the source and the audio to the same length |
 | LAu Motion Transfer · Labeled Comparison | Puts two clips side by side with a caption above each; the smaller clip is resized to the larger one |
 | LAu Motion Transfer · Face Mask on Latent | Limits the face refine to the face SAM3 finds: only the face is re-rendered and pasted back, hair and background stay as H3 made them |
+| LAu Motion Transfer · Swap Area (refine settings) | Sets the Adaptive refine for the mode: as before for Role Swap / Fashion; for Face only a stronger redraw on every frame of the original video |
 | LAu Studio | Canvas-only banner at the top of the workflow. It is never sent to the server |
 
 ### Install
@@ -154,6 +165,7 @@ The fl2va checkpoint and the Fashion LoRAs are only needed for the optional Fash
 - **Close-ups look over-processed after the face refine?** That is what the Face Size Fade prevents. Faces taller than ~180 px (at 1080p) keep the H3 result; lower `no_fix_above_px` to refine even less.
 - **Precise face mask (SAM3):** sharper eyes and mouth on medium-size faces, no halo in the hair. It adds 1-2 minutes per run; turn it off in *Extras* to go back to the elliptical area.
 - **Character swap LoRA v1.5:** makes the face closer to Picture 1 (in our tests identity rose 5-12% with the same sharpness and outfit). It can make the smile follow Picture 1; if the expression looks forced, lower its strength in node *03F* or turn it off in *Extras*.
+- **Face only:** the new face keeps the head shape, hair and earrings of the person in the video, so it can look like a mix of the two people (in our tests about 70% of the likeness of Role Swap). Raise `face_denoise` on the *SWAP AREA* node for more likeness, lower it to keep more of the original expression. A hand in front of the face can move a little.
 - If the first second looks wrong, try another seed before changing the prompt.
 - Running out of memory: lower the resolution, or keep the face refine on *Adaptive* and turn off the extras.
 - **10-second clips:** lower *megapixels* to 0.6-0.7. A 10 s run at 0.65 MP takes about 40 minutes on a 16 GB card.
@@ -174,7 +186,7 @@ O **LAu Motion Transfer** troca a pessoa de um vídeo de dança ou movimento pel
 Este repositório traz:
 
 - **`example_workflows/LAu_Motion_Transfer.json`**: o workflow. Depois de instalar, ele aparece no ComfyUI em *Templates → Custom nodes → LAu Motion Transfer*.
-- **9 nós auxiliares** (categoria *LAu Motion Transfer*), descritos na tabela da versão em inglês, e o banner **LAu Studio**.
+- **10 nós auxiliares** (categoria *LAu Motion Transfer*), descritos na tabela da versão em inglês, e o banner **LAu Studio**.
 
 ### Começo rápido
 
@@ -195,6 +207,16 @@ Este repositório traz:
 
 Todas as escolhas ficam nos cartões de chave em **1 · Settings** (Mode, Face refine, Extras). Os nós roxos são os que você muda a cada geração.
 
+Cartão **Mode**:
+
+| Modo | O que muda | O que fica do vídeo original |
+|---|---|---|
+| **Role Swap** | a pessoa inteira: rosto, cabelo, corpo e roupa | movimento, câmera, cenário, som |
+| **Fashion** | clipe de moda opcional a partir da Picture 1 / Picture 2 | — |
+| **Face only** | só o rosto, redesenhado a partir da Picture 1 | cabelo, corpo, roupa, movimento, câmera, cenário, som |
+
+No **Face only** a geração H3 e a segmentação SeC não rodam: o refinamento Adaptive trabalha direto no vídeo original (segue o rosto do vídeo, refina todos os quadros, força 0,8 no nó *SWAP AREA*). Não precisa marcar pontos.
+
 ### Instalação
 
 1. Instale os pacotes da lista em inglês pelo ComfyUI Manager (ou com `git clone` em `custom_nodes`).
@@ -209,6 +231,7 @@ Todas as escolhas ficam nos cartões de chave em **1 · Settings** (Mode, Face r
 - **Rosto de perto ficou processado demais depois do refinamento?** É isso que o Face Size Fade evita. Rostos com mais de ~180 px (em 1080p) mantêm o resultado do H3; diminua `no_fix_above_px` para refinar ainda menos.
 - **Máscara precisa do rosto (SAM3):** olhos e boca mais nítidos em rostos de tamanho médio, sem halo no cabelo. Acrescenta 1 a 2 minutos por geração; desligue em *Extras* para voltar à área em elipse.
 - **Character swap LoRA v1.5:** deixa o rosto mais parecido com a Picture 1 (nos nossos testes a identidade subiu de 5% a 12%, com a mesma nitidez e a mesma roupa). Ela pode fazer o sorriso seguir a Picture 1; se a expressão ficar forçada, diminua a força no nó *03F* ou desligue em *Extras*.
+- **Face only:** o rosto novo mantém o formato da cabeça, o cabelo e os brincos da pessoa do vídeo, então pode parecer uma mistura das duas pessoas (nos nossos testes, cerca de 70% da semelhança do Role Swap). Aumente `face_denoise` no nó *SWAP AREA* para mais semelhança, diminua para manter mais da expressão original. Uma mão na frente do rosto pode mudar um pouco de lugar.
 - Se o primeiro segundo sair estranho, troque a seed antes de mexer no prompt.
 - Se faltar memória, diminua a resolução ou deixe o refinamento em *Adaptive* e desligue os extras.
 - **Vídeos de 10 segundos:** baixe *megapixels* para 0,6-0,7. Uma geração de 10 s a 0,65 MP leva cerca de 40 minutos numa placa de 16 GB.
