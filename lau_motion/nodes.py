@@ -49,16 +49,25 @@ class LAuMotionModes(io.ComfyNode):
                 io.Boolean.Input("face_mask_sam3", default=True,
                                  tooltip="Adaptive refine: re-render and paste only the face found by SAM3 "
                                          "(off = the elliptical area of the H3-FaceRefine pack)."),
+                io.Boolean.Input("keep_background", default=False, optional=True,
+                                 tooltip="Role Swap: after the base generation, paste the original video back "
+                                         "outside the original person and the new character, so the scene stays "
+                                         "exactly as filmed."),
+                io.Boolean.Input("new_background", default=False, optional=True,
+                                 tooltip="Role Swap: the background picture (Picture 3) replaces the filmed scene in "
+                                         "the guide video, so the character is generated in the new place and the "
+                                         "picture is pasted back around it. Best with a fixed camera."),
             ],
             outputs=[io.Boolean.Output(name) for name in (
                 "fashion", "reference_task", "t8", "adaptive", "refine", "dlss",
                 "comparison", "debug_role", "debug_t8", "debug_adaptive", "face_mask", "keep_original")]
-                    + [io.String.Output("swap_area")],
+                    + [io.String.Output("swap_area"), io.Boolean.Output("keep_background"),
+                       io.Boolean.Output("new_background")],
         )
 
     @classmethod
     def execute(cls, generation_mode, fashion_task, face_refine, dlss_enabled, save_comparison, save_debug,
-                face_mask_sam3=True):
+                face_mask_sam3=True, keep_background=False, new_background=False):
         face_swap = generation_mode == "Face Only"
         is_fashion = generation_mode == "Fashion Video"
         # the face swap modes are made by the Adaptive refine on the original video, whatever the refine switch says
@@ -80,7 +89,10 @@ class LAuMotionModes(io.ComfyNode):
             "keep_original": face_swap,
         }
         area = "face" if face_swap else "person"
-        return io.NodeOutput(*flags.values(), area)
+        role = generation_mode == "Role Swap"
+        new_bg = bool(new_background) and role
+        keep_bg = (bool(keep_background) and role) or new_bg      # a new background is always pasted back
+        return io.NodeOutput(*flags.values(), area, keep_bg, new_bg)
 
 
 class LAuSwapArea(io.ComfyNode):
@@ -514,5 +526,126 @@ class LAuFaceMaskLatent(io.ComfyNode):
         return io.NodeOutput(soft_model, out, pixel_masks, report)
 
 
+def _fit_frames(x: torch.Tensor, n: int) -> torch.Tensor:
+    """First n frames of a batch; the last frame is repeated when the batch is shorter."""
+    if x.shape[0] >= n:
+        return x[:n]
+    return torch.cat([x, x[-1:].expand(n - x.shape[0], *x.shape[1:])], dim=0)
+
+
+def _resize_masks(m: torch.Tensor, h: int, w: int) -> torch.Tensor:
+    m = m.float()
+    if m.ndim == 2:
+        m = m[None]
+    if tuple(m.shape[-2:]) != (h, w):
+        m = F.interpolate(m[:, None], size=(h, w), mode="bilinear", align_corners=False)[:, 0]
+    return m.clamp(0, 1)
+
+
+class LAuKeepBackground(io.ComfyNode):
+    """Role Swap: the generated clip inside (original person OR new character), the original video everywhere else."""
+
+    @classmethod
+    def define_schema(cls):
+        return io.Schema(
+            node_id="LAuKeepBackground",
+            display_name="LAu Motion Transfer · Keep Original Background",
+            category=CATEGORY,
+            description="H3 redraws the whole frame, so the scene comes back slightly changed. This node keeps the "
+                        "generated pixels only inside the union of the original person mask and the new character "
+                        "mask (grown and feathered) and pastes the original video everywhere else. Sizes and frame "
+                        "counts are matched to the generated clip.",
+            inputs=[
+                io.Image.Input("generated", tooltip="Base clip from the generation (Role Swap)."),
+                io.Image.Input("original", tooltip="Source video frames (any size, resized to the generated clip)."),
+                io.Mask.Input("person_mask", tooltip="Original person, one mask per source frame (SeC)."),
+                io.Mask.Input("character_mask", optional=True,
+                              tooltip="New character in the generated clip (SAM3), so a wider outfit or hair is kept."),
+                io.Int.Input("grow", default=20, min=0, max=256, tooltip="Pixels added around the union mask."),
+                io.Int.Input("feather", default=12, min=0, max=128, tooltip="Soft edge width in pixels."),
+                io.Boolean.Input("new_background", default=False, optional=True,
+                                 tooltip="New background mode: paste 'background' instead of the original video and "
+                                         "follow only the new character (the original person's outline no longer "
+                                         "matters, and keeping it leaves a patch shaped like the old clothes)."),
+                io.Image.Input("background", optional=True, tooltip="Background frames (LAu Background Frames)."),
+                io.Int.Input("new_bg_grow", default=4, min=0, max=256, optional=True,
+                             tooltip="New background mode: pixels added around the character. Keep it small: "
+                                     "the generated sand/ground in this band changes from frame to frame."),
+                io.Int.Input("new_bg_feather", default=4, min=0, max=128, optional=True,
+                             tooltip="New background mode: soft edge width in pixels."),
+            ],
+            outputs=[io.Image.Output(display_name="image"), io.Mask.Output(display_name="mask"),
+                     io.String.Output(display_name="report")],
+        )
+
+    @classmethod
+    def execute(cls, generated, original, person_mask, grow, feather, character_mask=None,
+                new_background=False, background=None, new_bg_grow=4, new_bg_feather=4):
+        n, h, w, _ = generated.shape
+        swap_bg = bool(new_background) and background is not None
+        if swap_bg:
+            grow, feather = new_bg_grow, new_bg_feather
+        orig = _fit_frames(background if swap_bg else original, n).to(generated.device, generated.dtype)
+        if tuple(orig.shape[1:3]) != (h, w):
+            orig = F.interpolate(orig.movedim(-1, 1), size=(h, w), mode="bicubic",
+                                 align_corners=False).movedim(1, -1).clamp(0, 1)
+        if swap_bg and character_mask is not None:
+            m = _fit_frames(_resize_masks(character_mask, h, w), n)
+        else:
+            m = _fit_frames(_resize_masks(person_mask, h, w), n)
+            if character_mask is not None:
+                m = torch.maximum(m, _fit_frames(_resize_masks(character_mask, h, w), n))
+        m = (m > 0.5).float().to(generated.device)
+        if grow > 0:
+            m = F.max_pool2d(m[:, None], 2 * grow + 1, stride=1, padding=grow)[:, 0]
+        if feather > 0:
+            k = 2 * feather + 1
+            m = F.avg_pool2d(F.pad(m[:, None], (feather,) * 4, mode="replicate"), k, stride=1)[:, 0]
+            m = F.avg_pool2d(F.pad(m[:, None], (feather,) * 4, mode="replicate"), k, stride=1)[:, 0]
+        a = m[..., None].to(generated.dtype)
+        out = generated * a + orig * (1 - a)
+        report = (f"keep background: {n} frames {w}x{h}, generated area {float((m > 0.5).float().mean()) * 100:.1f}% "
+                  f"of the frame, {'new background picture' if swap_bg else 'original video'} elsewhere")
+        print(f"[LAu Motion Transfer] {report}")
+        return io.NodeOutput(out, m, report)
+
+
+class LAuBackgroundFrames(io.ComfyNode):
+    """A still background picture turned into frames shaped like the source video."""
+
+    @classmethod
+    def define_schema(cls):
+        return io.Schema(
+            node_id="LAuBackgroundFrames",
+            display_name="LAu Motion Transfer · Background Frames",
+            category=CATEGORY,
+            description="Crops the picture to the aspect ratio of the source video (centre, or shifted with "
+                        "horizontal_position), resizes it to the video size and repeats it for every frame.",
+            inputs=[
+                io.Image.Input("image", tooltip="The new background (Picture 3)."),
+                io.Image.Input("reference", tooltip="Source video frames: size and frame count to match."),
+                io.Float.Input("horizontal_position", default=0.5, min=0.0, max=1.0, step=0.05,
+                               tooltip="Which part of a wide picture to keep: 0 = left, 0.5 = centre, 1 = right."),
+            ],
+            outputs=[io.Image.Output(display_name="frames")],
+        )
+
+    @classmethod
+    def execute(cls, image, reference, horizontal_position):
+        n, h, w, _ = reference.shape
+        img = image[:1].float()
+        ih, iw = img.shape[1:3]
+        target = w / h
+        if iw / ih > target:                                  # too wide: crop the sides
+            cw = max(1, round(ih * target)); x0 = round((iw - cw) * horizontal_position)
+            img = img[:, :, x0:x0 + cw]
+        else:                                                 # too tall: crop top and bottom evenly
+            ch = max(1, round(iw / target)); y0 = (ih - ch) // 2
+            img = img[:, y0:y0 + ch]
+        img = F.interpolate(img.movedim(-1, 1), size=(h, w), mode="bicubic", align_corners=False)
+        img = img.movedim(1, -1).clamp(0, 1)[..., :3]
+        return io.NodeOutput(img.expand(n, h, w, 3).contiguous())
+
+
 NODES = [LAuMotionModes, LAuDuration, LAuOptionalLoRA, LAuSaveVideo, LAuSparseAttention, LAuT8FaceStitch, LAuTrimAV,
-         LAuLabeledComparison, LAuFaceMaskLatent, LAuSwapArea]
+         LAuLabeledComparison, LAuFaceMaskLatent, LAuSwapArea, LAuKeepBackground, LAuBackgroundFrames]

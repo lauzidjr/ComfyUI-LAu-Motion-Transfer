@@ -100,6 +100,11 @@ All choices are on the switch cards in **1 · Settings** (Mode, Face refine, Ext
 
 In **Face only** the H3 generation and the SeC segmentation do not run: the Adaptive face refine works straight on the original video (follows the face of the video, refines every frame, denoise 0.8 set on the *SWAP AREA* node). No points are needed.
 
+**Background** (Role Swap, both rows on the *Extras* card):
+
+- **Keep the original background** (on by default): H3 redraws the whole frame, so the walls, floor and objects can drift a little. With this switch on, only the new character is kept from the H3 clip and everything else comes back from the source video. SAM3 finds the new character, so longer hair or a wider outfit is kept. In our tests the scene matched the source video 93% of the time instead of 81%, with the same face.
+- **New background from Picture 3**: put a photo in the *BACKGROUND | Picture 3* node and turn this row on. The photo is cropped to the video size (`horizontal_position`: 0 = left, 0.5 = centre, 1 = right), H3 generates the character over it, and the photo is pasted back around the character. The camera of the source video does not move the photo, so it works best with a still camera.
+
 ### Nodes
 
 | Node | What it does |
@@ -114,6 +119,8 @@ In **Face only** the H3 generation and the SeC segmentation do not run: the Adap
 | LAu Motion Transfer · Labeled Comparison | Puts two clips side by side with a caption above each; the smaller clip is resized to the larger one |
 | LAu Motion Transfer · Face Mask on Latent | Limits the face refine to the face SAM3 finds: only the face is re-rendered and pasted back, hair and background stay as H3 made them |
 | LAu Motion Transfer · Swap Area (refine settings) | Sets the Adaptive refine for the mode: as before for Role Swap / Fashion; for Face only a stronger redraw on every frame of the original video |
+| LAu Motion Transfer · Keep Background | Pastes the source video (or the new background) back around the generated character. Margin: `grow` / `feather` for the original background (20 / 12 px), `new_bg_grow` / `new_bg_feather` for a new background (4 / 4 px) |
+| LAu Motion Transfer · Background Frames | Crops a photo to the video size and repeats it for every frame, for the new background mode |
 | LAu Studio | Canvas-only banner at the top of the workflow. It is never sent to the server |
 
 ### Install
@@ -166,6 +173,8 @@ The fl2va checkpoint and the Fashion LoRAs are only needed for the optional Fash
 - **Precise face mask (SAM3):** sharper eyes and mouth on medium-size faces, no halo in the hair. It adds 1-2 minutes per run; turn it off in *Extras* to go back to the elliptical area.
 - **Character swap LoRA v1.5:** makes the face closer to Picture 1 (in our tests identity rose 5-12% with the same sharpness and outfit). It can make the smile follow Picture 1; if the expression looks forced, lower its strength in node *03F* or turn it off in *Extras*.
 - **Face only:** the new face keeps the head shape, hair and earrings of the person in the video, so it can look like a mix of the two people (in our tests about 70% of the likeness of Role Swap). Raise `face_denoise` on the *SWAP AREA* node for more likeness, lower it to keep more of the original expression. A hand in front of the face can move a little.
+- **Keep the original background:** the original person is removed too, so a shorter outfit shows the source scene where the old clothes were. If something of the old person shows at the edge, raise `grow` on the *KEEP BACKGROUND* node.
+- **New background:** the ground near the feet comes from your photo, so pick a photo whose floor and light match the pose (a beach for a person standing on sand). If the generated ground shows next to the legs, lower `new_bg_grow`; if a thin line of the old background shows around the character, raise it.
 - If the first second looks wrong, try another seed before changing the prompt.
 - Running out of memory: lower the resolution, or keep the face refine on *Adaptive* and turn off the extras.
 - **10-second clips:** lower *megapixels* to 0.6-0.7. A 10 s run at 0.65 MP takes about 40 minutes on a 16 GB card.
@@ -217,6 +226,11 @@ Cartão **Mode**:
 
 No **Face only** a geração H3 e a segmentação SeC não rodam: o refinamento Adaptive trabalha direto no vídeo original (segue o rosto do vídeo, refina todos os quadros, força 0,8 no nó *SWAP AREA*). Não precisa marcar pontos.
 
+**Fundo** (Role Swap, as duas linhas ficam no cartão *Extras*):
+
+- **Keep the original background** (ligado por padrão): o H3 redesenha o quadro inteiro, então paredes, chão e objetos podem mudar um pouco. Com essa chave ligada, só o personagem novo vem do clipe do H3 e todo o resto volta do vídeo original. O SAM3 acha o personagem novo, então cabelo mais comprido ou roupa mais larga não são cortados. Nos nossos testes o cenário ficou 93% igual ao original, em vez de 81%, com o mesmo rosto.
+- **New background from Picture 3**: coloque uma foto no nó *BACKGROUND | Picture 3* e ligue essa linha. A foto é recortada no tamanho do vídeo (`horizontal_position`: 0 = esquerda, 0,5 = centro, 1 = direita), o H3 gera o personagem em cima dela e a foto é colada de volta em volta do personagem. A câmera do vídeo original não move a foto, então funciona melhor com câmera parada.
+
 ### Instalação
 
 1. Instale os pacotes da lista em inglês pelo ComfyUI Manager (ou com `git clone` em `custom_nodes`).
@@ -232,6 +246,8 @@ No **Face only** a geração H3 e a segmentação SeC não rodam: o refinamento 
 - **Máscara precisa do rosto (SAM3):** olhos e boca mais nítidos em rostos de tamanho médio, sem halo no cabelo. Acrescenta 1 a 2 minutos por geração; desligue em *Extras* para voltar à área em elipse.
 - **Character swap LoRA v1.5:** deixa o rosto mais parecido com a Picture 1 (nos nossos testes a identidade subiu de 5% a 12%, com a mesma nitidez e a mesma roupa). Ela pode fazer o sorriso seguir a Picture 1; se a expressão ficar forçada, diminua a força no nó *03F* ou desligue em *Extras*.
 - **Face only:** o rosto novo mantém o formato da cabeça, o cabelo e os brincos da pessoa do vídeo, então pode parecer uma mistura das duas pessoas (nos nossos testes, cerca de 70% da semelhança do Role Swap). Aumente `face_denoise` no nó *SWAP AREA* para mais semelhança, diminua para manter mais da expressão original. Uma mão na frente do rosto pode mudar um pouco de lugar.
+- **Manter o fundo original:** a pessoa original também sai, então numa roupa mais curta aparece o cenário do vídeo onde estava a roupa antiga. Se sobrar algo da pessoa antiga na borda, aumente `grow` no nó *KEEP BACKGROUND*.
+- **Fundo novo:** o chão perto dos pés vem da sua foto, então escolha uma foto com chão e luz que combinem com a pose (uma praia para alguém de pé na areia). Se o chão gerado aparecer ao lado das pernas, diminua `new_bg_grow`; se sobrar uma linha fina do fundo antigo em volta do personagem, aumente.
 - Se o primeiro segundo sair estranho, troque a seed antes de mexer no prompt.
 - Se faltar memória, diminua a resolução ou deixe o refinamento em *Adaptive* e desligue os extras.
 - **Vídeos de 10 segundos:** baixe *megapixels* para 0,6-0,7. Uma geração de 10 s a 0,65 MP leva cerca de 40 minutos numa placa de 16 GB.
